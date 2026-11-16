@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: klbus
+      POSTGRES_PASSWORD: klbus   # local development only; change it if you expose the port
+      POSTGRES_DB: klbus
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Runs 01_schema.sql then 02_analytics.sql the first time the volume is created
+      - ./sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U klbus -d klbus"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  poller:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://klbus:klbus@db:5432/klbus
+      POLL_INTERVAL_S: ${POLL_INTERVAL_S:-30}
+      KL_BBOX: ${KL_BBOX:-3.03,101.58,3.25,101.78}
+      ROUTES: ${ROUTES:-}
+      RAW_EVERY_N: ${RAW_EVERY_N:-20}
+      RAW_DIR: /app/data/raw
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+volumes:
+  pgdata:
